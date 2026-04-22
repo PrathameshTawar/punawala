@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-wizard-backend
+  labels:
+    app: loan-wizard
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: loan-wizard
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: loan-wizard
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: loan-wizard-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: loan-wizard-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: loan-wizard-secrets
+              key: redis-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: loan-wizard-secrets
+              key: openai-api-key
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: loan-wizard-secrets
+              key: jwt-secret-key
+        - name: ENVIRONMENT
+          value: "production"
+        - name: OTEL_SERVICE_NAME
+          value: "loan-wizard-backend"
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector:4317"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+      restartPolicy: Always

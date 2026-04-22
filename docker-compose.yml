@@ -1,0 +1,72 @@
+version: "3.9"
+
+services:
+
+  # ── Database ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15
+    container_name: lw-postgres
+    environment:
+      - POSTGRES_DB=loanwizard
+      - POSTGRES_USER=loanwizard
+      - POSTGRES_PASSWORD=dev_password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loanwizard -d loanwizard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: lw-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Backend API ────────────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: lw-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-demo}
+      - SECRET_KEY=${SECRET_KEY:-dev_secret_change_in_prod}
+      - DATABASE_URL=postgresql://loanwizard:dev_password@db:5432/loanwizard
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: lw-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:
